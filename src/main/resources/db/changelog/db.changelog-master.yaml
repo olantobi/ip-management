@@ -75,7 +75,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: last_modified_date
+                  name: modified_date
                   type: datetime
                   constraints:
                     nullable: false
