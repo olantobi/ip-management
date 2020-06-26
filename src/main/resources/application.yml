@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:ipmanagement
+    platform: mysql
+    username: auth
+    password: auth
+    driverClassName: org.h2.Driver
+    liquibase:
+      enabled: true
+      default-schema: ipmanagement
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate

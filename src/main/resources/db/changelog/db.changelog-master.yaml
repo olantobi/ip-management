@@ -1,0 +1,87 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: olantobi
+      preConditions:
+        - not:
+            - tableExists:
+                tableName: ip_pool
+      changes:
+        - createTable:
+            tableName: ip_pool
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(255)
+              - column:
+                  name: total_capacity
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: used_capacity
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: upper_bound
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lower_bound
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 2
+      author: olantobi
+      preConditions:
+        - not:
+            - tableExists:
+                tableName: allocated_ip_address
+      changes:
+        - createTable:
+            tableName: allocated_ip_address
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: ip_pool_id
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: value
+                  type: varchar(50)
+              - column:
+                  name: resource_state
+                  type: varchar(20)
+              - column:
+                  name: created_date
+                  type: datetime
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_modified_date
+                  type: datetime
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseColumnNames: ip_pool_id
+            baseTableName: allocated_ip_address
+            constraintName: fk_ip_pool
+            referencedColumnNames: id
+            referencedTableName: ip_pool
