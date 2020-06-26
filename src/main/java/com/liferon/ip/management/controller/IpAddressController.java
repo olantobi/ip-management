@@ -1,7 +1,6 @@
 package com.liferon.ip.management.controller;
 
 import com.liferon.ip.management.dto.*;
-import com.liferon.ip.management.model.IpPool;
 import com.liferon.ip.management.repository.IpPoolRepository;
 import com.liferon.ip.management.service.IpAddressService;
 import io.swagger.annotations.ApiOperation;
@@ -100,10 +99,5 @@ public class IpAddressController {
                 .successful(true)
                 .message("Successful")
                 .build();
-    }
-
-    @GetMapping("/pools")
-    public List<IpPool> getIpPools() {
-        return ipPoolRepository.findAll();
     }
 }
