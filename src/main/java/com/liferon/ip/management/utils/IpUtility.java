@@ -30,4 +30,12 @@ public class IpUtility {
         }
         return ipAddress;
     }
+
+    public static boolean ipIsWithinRange(String lowerBound, String upperBound, String ipAddress) {
+        int lowerBoundInt = ipAddressToInteger(lowerBound);
+        int upperBoundInt = ipAddressToInteger(upperBound);
+        int ipAddressInt = ipAddressToInteger(ipAddress);
+
+        return (ipAddressInt >= lowerBoundInt && ipAddressInt <= upperBoundInt);
+    }
 }

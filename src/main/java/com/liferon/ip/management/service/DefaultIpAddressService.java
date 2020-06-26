@@ -23,6 +23,7 @@ import java.util.Optional;
 public class DefaultIpAddressService implements IpAddressService {
     private final AllocatedIpAddressRepository ipAddressRepository;
     private final IpPoolRepository ipPoolRepository;
+    private static final String ipRegex = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
 
     @Override
     public List<AllocatedIpResponseDto> reserveDynamicIpAddress(DynamicIpRequestDto ipRequestDto) {
@@ -57,60 +58,101 @@ public class DefaultIpAddressService implements IpAddressService {
         return OrikaUtils.map(allocatedIps, AllocatedIpResponseDto.class);
     }
 
-    private List<AllocatedIpAddress> generateIpAddressRange(int startIp, int qty, IpPool ipPool) {
-        List<AllocatedIpAddress> ipAddresses = new ArrayList<>();
-        for (int ip = 0; ip < qty; ip++) {
-            String ipAddress = IpUtility.integerToIpAddress(startIp + ip);
-
-            if (!ipAddressRepository.findByValue(ipAddress).isPresent()) {
-                AllocatedIpAddress allocatedIpAddress = AllocatedIpAddress.builder()
-                        .ipPool(ipPool)
-                        .value(ipAddress)
-                        .resourceState(ResourceState.RESERVED).build();
-                ipAddresses.add(allocatedIpAddress);
-            }
-        }
-
-        return ipAddresses;
-    }
-
     @Override
     public AllocatedIpResponseDto reserveStaticIpAddress(StaticIpRequestDto ipRequestDto) {
+        if (!validateIpAddress(ipRequestDto.getIpAddress())) {
+            throw new InvalidRequestParameterException("Invalid IP address");
+        }
+
         Optional<IpPool> ipPoolOption = ipPoolRepository.findById(ipRequestDto.getPoolId());
         if (!ipPoolOption.isPresent()) {
-            throw new InvalidRequestParameterException("Invalid ip pool id");
+            throw new InvalidRequestParameterException("Invalid IP pool id");
         }
 
         IpPool ipPool = ipPoolOption.get();
         if (ipPool.isFilledUp()) {
-            throw new InvalidRequestParameterException("Requested ip pool is filled up");
+            throw new InvalidRequestParameterException("Requested IP pool is filled up");
         }
 
-        if (ipAddressRepository.findByValue(ipRequestDto.getIpAddress()).isPresent()) {
+        if (IpUtility.ipIsWithinRange(ipPool.getLowerBound(), ipPool.getUpperBound(), ipRequestDto.getIpAddress())) {
+            throw new InvalidRequestParameterException("Requested ip address is not within specified ip pool range");
+        }
+
+        if (ipAddressRepository.findByValueAndResourceStateNot(ipRequestDto.getIpAddress(), ResourceState.FREE).isPresent()) {
             throw new InvalidRequestParameterException("Requested ip address is not available");
         }
-
-        ipPool.incrementUsedCapacity();
-        ipPoolRepository.save(ipPool);
 
         AllocatedIpAddress ipAddress = AllocatedIpAddress.builder().
                 ipPool(ipPool)
                 .value(ipRequestDto.getIpAddress())
                 .resourceState(ResourceState.RESERVED)
                 .build();
-
         AllocatedIpAddress allocatedIp = ipAddressRepository.save(ipAddress);
+
+        ipPool.incrementUsedCapacity();
+        ipPoolRepository.save(ipPool);
+
         return OrikaUtils.map(allocatedIp, AllocatedIpResponseDto.class);
     }
 
     @Override
-    public void blacklistIpAddress(BlacklistIpRequestDto ipRequestDto) {
+    public AllocatedIpResponseDto blacklistIpAddress(BlacklistIpRequestDto ipRequestDto) {
+        if (!validateIpAddress(ipRequestDto.getIpAddress())) {
+            throw new InvalidRequestParameterException("Invalid IP address");
+        }
 
+        Optional<IpPool> ipPoolOption = ipPoolRepository.findById(ipRequestDto.getPoolId());
+        if (!ipPoolOption.isPresent()) {
+            throw new InvalidRequestParameterException("Invalid ip pool id");
+        }
+
+        if (ipAddressRepository.findByValueAndResourceState(ipRequestDto.getIpAddress(), ResourceState.RESERVED).isPresent()) {
+            throw new InvalidRequestParameterException("Requested ip address is already reserved");
+        }
+        IpPool ipPool = ipPoolOption.get();
+
+        if (IpUtility.ipIsWithinRange(ipPool.getLowerBound(), ipPool.getUpperBound(), ipRequestDto.getIpAddress())) {
+            throw new InvalidRequestParameterException("Requested ip address is not within specified ip pool range");
+        }
+
+        AllocatedIpAddress ipAddress = AllocatedIpAddress.builder().
+                ipPool(ipPool)
+                .value(ipRequestDto.getIpAddress())
+                .resourceState(ResourceState.BLACKLISTED)
+                .build();
+        AllocatedIpAddress allocatedIp = ipAddressRepository.save(ipAddress);
+
+        ipPool.incrementUsedCapacity();
+        ipPoolRepository.save(ipPool);
+
+        return OrikaUtils.map(allocatedIp, AllocatedIpResponseDto.class);
     }
 
     @Override
-    public void freeIpAddress(FreeIpRequestDto ipRequestDto) {
+    public AllocatedIpResponseDto freeIpAddress(FreeIpRequestDto ipRequestDto) throws InvalidRequestParameterException {
+        Optional<IpPool> ipPoolOption = ipPoolRepository.findById(ipRequestDto.getPoolId());
+        if (!ipPoolOption.isPresent()) {
+            throw new InvalidRequestParameterException("Invalid ip pool id");
+        }
 
+        IpPool ipPool = ipPoolOption.get();
+        if (IpUtility.ipIsWithinRange(ipPool.getLowerBound(), ipPool.getUpperBound(), ipRequestDto.getIpAddress())) {
+            throw new InvalidRequestParameterException("Requested IP address is not within specified ip pool range");
+        }
+
+        Optional<AllocatedIpAddress> allocatedIpAddressOption = ipAddressRepository.findByValue(ipRequestDto.getIpAddress());
+        if (!allocatedIpAddressOption.isPresent()) {
+            throw new InvalidRequestParameterException("Requested IP address not allocated");
+        }
+
+        AllocatedIpAddress ipAddress = allocatedIpAddressOption.get();
+        ipAddress.setResourceState(ResourceState.FREE);
+        AllocatedIpAddress allocatedIp = ipAddressRepository.save(ipAddress);
+
+        ipPool.decrementUsedCapacity();
+        ipPoolRepository.save(ipPool);
+
+        return OrikaUtils.map(allocatedIp, AllocatedIpResponseDto.class);
     }
 
     @Override
@@ -122,5 +164,26 @@ public class DefaultIpAddressService implements IpAddressService {
         }
 
         return OrikaUtils.map(ipAddressOption.get(), AllocatedIpResponseDto.class);
+    }
+
+    private List<AllocatedIpAddress> generateIpAddressRange(int startIp, int qty, IpPool ipPool) {
+        List<AllocatedIpAddress> ipAddresses = new ArrayList<>();
+        for (int ip = 0; ip < qty; ip++) {
+            String ipAddress = IpUtility.integerToIpAddress(startIp + ip);
+
+            if (!ipAddressRepository.findByValueAndResourceStateNot(ipAddress, ResourceState.FREE).isPresent()) {
+                AllocatedIpAddress allocatedIpAddress = AllocatedIpAddress.builder()
+                        .ipPool(ipPool)
+                        .value(ipAddress)
+                        .resourceState(ResourceState.RESERVED).build();
+                ipAddresses.add(allocatedIpAddress);
+            }
+        }
+
+        return ipAddresses;
+    }
+
+    private boolean validateIpAddress(String ipAddress) {
+        return ipAddress.matches(ipRegex);
     }
 }

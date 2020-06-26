@@ -39,6 +39,10 @@ public class IpPool {
         this.usedCapacity++;
     }
 
+    public void decrementUsedCapacity() {
+        this.usedCapacity--;
+    }
+
     public boolean isFilledUp() {
         return this.totalCapacity == this.usedCapacity;
     }
