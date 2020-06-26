@@ -78,15 +78,22 @@ public class DefaultIpAddressService implements IpAddressService {
             throw new InvalidRequestParameterException("Requested ip address is not within specified ip pool range");
         }
 
-        if (ipAddressRepository.findByValueAndResourceStateNot(ipRequestDto.getIpAddress(), ResourceState.FREE).isPresent()) {
+        Optional<AllocatedIpAddress> allocatedIpOption = ipAddressRepository.findByValue(ipRequestDto.getIpAddress());
+        if (allocatedIpOption.isPresent() && allocatedIpOption.get().getResourceState() == ResourceState.BLACKLISTED) {
+            throw new InvalidRequestParameterException("Requested ip address is blacklisted");
+        }
+
+        if (allocatedIpOption.isPresent() && allocatedIpOption.get().getResourceState() == ResourceState.RESERVED) {
             throw new InvalidRequestParameterException("Requested ip address is not available");
         }
 
-        AllocatedIpAddress ipAddress = AllocatedIpAddress.builder().
+        AllocatedIpAddress ipAddress = (allocatedIpOption.isPresent() && allocatedIpOption.get().getResourceState() == ResourceState.FREE) ?
+        allocatedIpOption.get() : AllocatedIpAddress.builder().
                 ipPool(ipPool)
                 .value(ipRequestDto.getIpAddress())
-                .resourceState(ResourceState.RESERVED)
                 .build();
+        ipAddress.setResourceState(ResourceState.RESERVED);
+
         AllocatedIpAddress allocatedIp = ipAddressRepository.save(ipAddress);
 
         ipPool.incrementUsedCapacity();

@@ -8,10 +8,10 @@ import com.liferon.ip.management.dto.StaticIpRequestDto;
 import com.liferon.ip.management.exception.InvalidRequestParameterException;
 import com.liferon.ip.management.model.AllocatedIpAddress;
 import com.liferon.ip.management.model.IpPool;
+import com.liferon.ip.management.model.ResourceState;
 import com.liferon.ip.management.repository.AllocatedIpAddressRepository;
 import com.liferon.ip.management.repository.IpPoolRepository;
 import com.liferon.ip.management.utils.JSONHelper;
-import com.liferon.ip.management.validator.RequestValidator;
 import ma.glasnost.orika.MapperFacade;
 import ma.glasnost.orika.impl.DefaultMapperFactory;
 import org.junit.Assert;
@@ -20,7 +20,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.IOException;
@@ -32,9 +31,6 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DefaultIpAddressServiceTest {
-
-    @Spy
-    private RequestValidator requestValidator;
     @Mock
     private AllocatedIpAddressRepository ipAddressRepository;
     @Mock
@@ -85,6 +81,8 @@ public class DefaultIpAddressServiceTest {
                 .id(poolId)
                 .totalCapacity(200)
                 .usedCapacity(50)
+                .lowerBound("10.70.25.1")
+                .upperBound("10.70.25.100")
                 .build();
 
 
@@ -119,6 +117,8 @@ public class DefaultIpAddressServiceTest {
                 .id(poolId)
                 .totalCapacity(200)
                 .usedCapacity(200)
+                .lowerBound("10.70.25.1")
+                .upperBound("10.70.25.100")
                 .build();
 
         when(ipPoolRepository.findById(poolId)).thenReturn(Optional.of(ipPool));
@@ -135,12 +135,15 @@ public class DefaultIpAddressServiceTest {
                 .id(poolId)
                 .totalCapacity(200)
                 .usedCapacity(50)
+                .lowerBound("10.70.25.1")
+                .upperBound("10.70.25.100")
                 .build();
 
         when(ipPoolRepository.findById(poolId)).thenReturn(Optional.of(ipPool));
         when(ipAddressRepository.findByValue(requestedIp))
                 .thenReturn(Optional.of(AllocatedIpAddress.builder()
                 .ipPool(ipPool)
+                .resourceState(ResourceState.RESERVED)
                 .value(requestedIp)
                 .build()));
 
